@@ -2,13 +2,13 @@
 
 MCP server for **legacy Jira Server** (v7.x) with Basic Authentication. Works with any MCP-compatible AI tool.
 
-> **🔔 Using Jira Cloud or Data Center 8.14+?** Use [mcp-atlassian](https://github.com/sooperset/mcp-atlassian) instead for OAuth/PAT support.
+> **Using Jira Cloud or Data Center 8.14+?** Use [mcp-atlassian](https://github.com/sooperset/mcp-atlassian) instead for OAuth/PAT support.
 
 ---
 
-## 📋 Prerequisites
+## Prerequisites
 
-**Node.js** (v18+) is required for MCP servers and the installer to work.
+**Node.js** (v18+) is required.
 
 **macOS / Linux:**
 ```bash
@@ -22,11 +22,9 @@ winget install -e --id OpenJS.NodeJS.LTS
 
 ---
 
-## 🚀 Quick Install (For Humans)
+## Quick Install
 
-> **🤖 AI Agents:** Do NOT use this method. This requires interactive terminal input for credentials. See the [For AI Agents](#-for-ai-agents) section below for the automated workflow.
-
-Install using **mcpm** (MCP Manager) - a universal installer that works with all AI agents:
+Install using **mcpm** (MCP Manager) — a universal installer that works with all AI agents:
 
 ```bash
 npx @khanglvm/mcpm https://github.com/khanglvm/jira-mcp
@@ -34,35 +32,48 @@ npx @khanglvm/mcpm https://github.com/khanglvm/jira-mcp
 
 **What this does:**
 - Auto-detects your installed AI agents (Claude Desktop, Cursor, VS Code, etc.)
-- Prompts for your Jira credentials securely (interactive terminal input)
+- Prompts for your Jira credentials securely
 - Transforms config to match each agent's format
 - Safely merges with existing configurations
 
+> **AI Agents:** Do NOT use this method — it requires interactive terminal input. See [For AI Agents](#for-ai-agents) below.
+
 ---
 
-## 🤖 For AI Agents
+## For AI Agents
 
-> **⚠️ IMPORTANT:** AI agents MUST NOT use the Quick Install command above. Instead, follow the automated installation workflow below to ensure proper configuration and agent compatibility.
+### MCP Installation
 
-### MCP Installation Workflow
-
-**REQUIRED:** Read and follow the [MCP Server Installation Workflow](https://raw.githubusercontent.com/khanglvm/agent-tools/refs/heads/main/.agent/workflows/install-mcp-server.md) to install this MCP server. This workflow handles:
+Follow the [MCP Server Installation Workflow](https://raw.githubusercontent.com/khanglvm/agent-tools/refs/heads/main/.agent/workflows/install-mcp-server.md) for automated setup:
 - Automatic agent detection and configuration
 - Secure credential collection
 - Proper config format transformation for your specific agent
 
-### Agent Skill
+### Agent Skill (Recommended)
 
-**REQUIRED:** Read the agent skill at [`.agent/skills/jira-mcp-v7/SKILL.md`](./.agent/skills/jira-mcp-v7/SKILL.md) before using Jira tools. It provides:
+Install the companion skill for JQL expertise, gotcha prevention, and response formatting:
 
-- **Complete JQL reference** - operators, fields, functions, and date syntax
-- **Critical gotchas** - `statusCategory` ("To Do") vs `status` vs `type` (Bug/Task)
-- **Common patterns** - ready-to-use JQL queries
-- **Workflow guidance** - how to use transitions correctly
+```bash
+# Install globally (available across all projects)
+npx skills add https://github.com/khanglvm/skills --skill jira-mcp -g
+
+# Install for a specific agent
+npx skills add https://github.com/khanglvm/skills --skill jira-mcp -a claude-code -g
+
+# Headless install (non-interactive, for CI/automation)
+npx skills add https://github.com/khanglvm/skills --skill jira-mcp -a claude-code -g -y
+```
+
+The skill provides:
+- **Complete JQL reference** — operators, fields, functions, and date syntax
+- **Critical gotchas** — `statusCategory` ("To Do") vs `status` vs `type` (Bug/Task)
+- **Common patterns** — ready-to-use JQL queries for standup prep, sprint overview, bug triage
+- **Workflow guidance** — transition-based status changes, self-hosted URL construction
+- **Response formatting** — clickable ticket links, table layouts, status icons
 
 ---
 
-## 🔧 Available Tools
+## Available Tools
 
 | Tool | Description |
 |------|-------------|
@@ -82,7 +93,7 @@ npx @khanglvm/mcpm https://github.com/khanglvm/jira-mcp
 
 ---
 
-## ⚙️ Environment Variables
+## Environment Variables
 
 | Variable | Required | Description |
 |----------|----------|-------------|
@@ -91,7 +102,34 @@ npx @khanglvm/mcpm https://github.com/khanglvm/jira-mcp
 | `JIRA_PASSWORD` | yes | Password |
 | `JIRA_API_VERSION` | no | API version (default: `2`) |
 
-## 📜 Changelog
+---
+
+## Best Practices
+
+### JQL Query Tips
+- Use `statusCategory` for broad filtering (`"To Do"`, `"In Progress"`, `"Done"`) — NOT `status` or `type`
+- Always quote values with spaces: `project = "My Project"`
+- Use `ORDER BY` to sort results: `ORDER BY created DESC`
+- Specify fields in `jira_search` to reduce response size: `["summary", "status", "assignee"]`
+
+### Workflow Transitions
+- You cannot set status directly — use `jira_get_transitions` to get valid transition IDs, then `jira_transition_issue`
+- Always call `jira_get_current_user` first to verify authentication
+
+### Common Gotcha
+```
+type = "To Do"  → ERROR: "The value 'To Do' does not exist for the field 'type'"
+```
+`"To Do"` is a **status category**, not an issue type. Use `statusCategory = "To Do"` instead.
+
+---
+
+## Changelog
+
+### v1.5.0
+- `feat`: migrate agent skill to [`khanglvm/skills`](https://github.com/khanglvm/skills) for global installation via `npx skills`
+- `docs`: rewrite README with best practices, updated skill installation guidance
+- `chore`: remove `.agent` directory (skill now lives in dedicated skills repo)
 
 ### v1.4.0
 - `feat`: add `mcp.json` for `mcpm` tool support

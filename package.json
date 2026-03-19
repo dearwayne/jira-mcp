@@ -1,6 +1,6 @@
 {
     "name": "@khanglvm/jira-mcp",
-    "version": "1.4.0",
+    "version": "1.5.0",
     "description": "MCP server providing Jira tools with basic authentication support for legacy Jira Server (v7.x and older)",
     "type": "module",
     "main": "dist/index.js",
