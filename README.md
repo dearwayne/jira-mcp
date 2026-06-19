@@ -90,6 +90,8 @@ The skill provides:
 | `jira_transition_issue` | Transition issue to new status |
 | `jira_get_current_user` | Get authenticated user info |
 | `jira_get_user` | Get user by username |
+| `jira_list_attachments` | List attachments on an issue |
+| `jira_get_attachment` | Download an attachment (image inline, else temp file) |
 
 ---
 
@@ -124,7 +126,18 @@ type = "To Do"  → ERROR: "The value 'To Do' does not exist for the field 'type
 
 ---
 
+### Attachments
+
+- `jira_list_attachments` returns each attachment's `id`, `filename`, `mimeType`, `size`, `created`, `author`, `content` (download URL) and `thumbnail`. Metadata is read from the issue's `fields.attachment[]` via the legacy `GET /rest/api/2/issue/{key}?fields=attachment` endpoint.
+- `jira_get_attachment` accepts an `attachmentId`, or resolves an attachment by `issueKey` + `filename`. **Images** (`mimeType` starting with `image/`) are returned as a viewable MCP image content block; **other files** are written to `os.tmpdir()/jira-mcp/<id>-<filename>` and returned as a text block with the saved path and metadata (inline base64 is included only when the file is small, under 256KB).
+- The attachment `content` URL is an **absolute** URL outside the `/rest/api/2` base; bytes are fetched with a raw authenticated request that reuses the Basic auth header and follows redirects. This is a **legacy Jira Server v7.x** integration — only `/rest/api/2` endpoints are used (no Cloud `/rest/api/3` or ADF).
+
+---
+
 ## Changelog
+
+### v1.6.0
+- `feat`: add attachment access tools `jira_list_attachments` and `jira_get_attachment` (images returned as inline image content blocks; other files saved to a temp path). Legacy Jira Server v2 API only.
 
 ### v1.5.0
 - `feat`: migrate agent skill to [`khanglvm/skills`](https://github.com/khanglvm/skills) for global installation via `npx skills`

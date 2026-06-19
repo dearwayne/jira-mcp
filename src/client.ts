@@ -288,6 +288,76 @@ export class JiraClient {
     async getUser(username: string): Promise<JiraUser> {
         return this.request<JiraUser>('GET', `/user?username=${encodeURIComponent(username)}`);
     }
+
+    // ============ Attachment Methods ============
+
+    /**
+     * Lists attachments for an issue.
+     * Reads from the issue's `fields.attachment[]` array via
+     * `GET /rest/api/2/issue/{key}?fields=attachment` (legacy Jira Server v2 API).
+     * @param issueIdOrKey - Issue key (e.g., "PROJ-123") or ID
+     * @returns Array of attachment metadata (empty if the issue has no attachments)
+     */
+    async listAttachments(issueIdOrKey: string): Promise<JiraAttachment[]> {
+        // Restrict the field set to `attachment` to keep the response small.
+        const issue = await this.getIssue(issueIdOrKey, 'attachment');
+        // `fields.attachment` is absent when attachments are disabled or none exist.
+        const attachments = issue.fields.attachment as JiraAttachment[] | undefined;
+        return Array.isArray(attachments) ? attachments : [];
+    }
+
+    /**
+     * Gets metadata for a single attachment by its numeric id.
+     * Uses `GET /rest/api/2/attachment/{id}` (legacy Jira Server v2 API).
+     * @param attachmentId - Numeric attachment id
+     * @returns Attachment metadata, including the absolute `content` download URL
+     */
+    async getAttachmentMeta(attachmentId: string): Promise<JiraAttachment> {
+        return this.request<JiraAttachment>(
+            'GET',
+            `/attachment/${encodeURIComponent(attachmentId)}`
+        );
+    }
+
+    /**
+     * Downloads the raw bytes of an attachment.
+     *
+     * The `content` URL from `fields.attachment[].content` (or `/attachment/{id}`)
+     * is an ABSOLUTE URL (e.g. `https://<host>/secure/attachment/{id}/{filename}`)
+     * that lives OUTSIDE the `/rest/api/2` base — so this does NOT reuse the private
+     * JSON-only `request<T>()` helper. It performs a raw authenticated `fetch`,
+     * reusing the same `Authorization: Basic ...` header, and follows redirects
+     * (fetch default).
+     *
+     * @param contentUrl - Absolute download URL (the attachment's `content` field)
+     * @returns The downloaded bytes plus the reported content type
+     * @throws {JiraApiError} If the download fails (e.g. 401/403/404)
+     */
+    async downloadAttachment(
+        contentUrl: string
+    ): Promise<{ buffer: Buffer; contentType: string }> {
+        const response = await fetch(contentUrl, {
+            method: 'GET',
+            headers: {
+                Authorization: this.authHeader,
+            },
+            // fetch follows redirects by default; Jira serves attachment bytes
+            // via a redirect to /secure/attachment/... which we must follow.
+            redirect: 'follow',
+        });
+
+        if (!response.ok) {
+            throw new JiraApiError(
+                `Failed to download attachment from ${contentUrl} (status ${response.status})`,
+                response.status
+            );
+        }
+
+        const arrayBuffer = await response.arrayBuffer();
+        const contentType =
+            response.headers.get('content-type') ?? 'application/octet-stream';
+        return { buffer: Buffer.from(arrayBuffer), contentType };
+    }
 }
 
 // ============ Type Definitions ============
@@ -420,4 +490,34 @@ export interface JiraUser {
     emailAddress?: string;
     active: boolean;
     timeZone?: string;
+}
+
+/**
+ * Jira attachment structure (legacy Jira Server v2 API).
+ * Shape of each item in an issue's `fields.attachment[]` and of
+ * `GET /rest/api/2/attachment/{id}`.
+ */
+export interface JiraAttachment {
+    /** Numeric attachment id (as a string) */
+    id: string;
+    /** REST self link for the attachment metadata */
+    self: string;
+    /** Original file name */
+    filename: string;
+    /** User who uploaded the attachment */
+    author?: { displayName: string; name: string };
+    /** ISO timestamp of when the attachment was created */
+    created: string;
+    /** File size in bytes */
+    size: number;
+    /** MIME type reported by Jira (e.g. "image/png") */
+    mimeType: string;
+    /**
+     * ABSOLUTE download URL for the raw bytes
+     * (typically `https://<host>/secure/attachment/{id}/{filename}`).
+     * Note: this is NOT under the `/rest/api/2` base.
+     */
+    content: string;
+    /** Optional absolute URL to a thumbnail (images only) */
+    thumbnail?: string;
 }

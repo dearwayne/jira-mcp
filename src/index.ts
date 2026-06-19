@@ -31,6 +31,8 @@ import {
     transitionToolDefinitions,
     createUserTools,
     userToolDefinitions,
+    createAttachmentTools,
+    attachmentToolDefinitions,
 } from './tools/index.js';
 import {
     parseSetupArgs,
@@ -179,16 +181,19 @@ async function runMcpServer(): Promise<void> {
     const projectTools = createProjectTools(jiraClient);
     const transitionTools = createTransitionTools(jiraClient);
     const userTools = createUserTools(jiraClient);
+    const attachmentTools = createAttachmentTools(jiraClient);
 
-    // Combine all tool handlers with type assertion 
-    // Individual handlers have stricter param types, but we know the SDK will provide correct args
+    // Combine all tool handlers with type assertion
+    // Individual handlers have stricter param types, but we know the SDK will provide correct args.
+    // Content blocks may be text OR image (attachment tools), so the type is loose here.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const allToolHandlers: Record<string, (args: any) => Promise<{ content: Array<{ type: string; text: string }> }>> = {
+    const allToolHandlers: Record<string, (args: any) => Promise<{ content: Array<Record<string, unknown>> }>> = {
         ...issueTools,
         ...searchTools,
         ...projectTools,
         ...transitionTools,
         ...userTools,
+        ...attachmentTools,
     };
 
     // Combine all tool definitions
@@ -198,6 +203,7 @@ async function runMcpServer(): Promise<void> {
         ...projectToolDefinitions,
         ...transitionToolDefinitions,
         ...userToolDefinitions,
+        ...attachmentToolDefinitions,
     ];
 
     // Create MCP server
