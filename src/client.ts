@@ -382,12 +382,15 @@ export interface JiraIssue {
     fields: {
         summary: string;
         description?: string;
-        status: { name: string; id: string };
-        priority?: { name: string; id: string };
-        assignee?: { displayName: string; name: string; emailAddress?: string };
-        reporter?: { displayName: string; name: string };
-        issuetype: { name: string; id: string };
-        project: { key: string; name: string };
+        // status / issuetype / project are optional+nullable in practice: a custom
+        // `fields` selection or an unusually-shaped ticket may omit them, so callers
+        // MUST null-guard (optional chaining) before reading nested props like .name.
+        status?: { name: string; id: string } | null;
+        priority?: { name: string; id: string } | null;
+        assignee?: { displayName: string; name: string; emailAddress?: string } | null;
+        reporter?: { displayName: string; name: string } | null;
+        issuetype?: { name: string; id: string } | null;
+        project?: { key: string; name: string } | null;
         created: string;
         updated: string;
         labels?: string[];
@@ -428,7 +431,8 @@ export interface UpdateIssueInput {
 export interface JiraComment {
     id: string;
     self: string;
-    author: { displayName: string; name: string };
+    // author may be absent (e.g. anonymized/deleted user); callers must null-guard.
+    author?: { displayName: string; name: string } | null;
     body: string;
     created: string;
     updated: string;
@@ -446,7 +450,8 @@ export interface CommentsResponse {
 export interface JiraTransition {
     id: string;
     name: string;
-    to: { id: string; name: string; statusCategory: { name: string } };
+    // `to` and its statusCategory can be absent on some Jira Server configs; null-guard.
+    to?: { id: string; name: string; statusCategory?: { name: string } | null } | null;
 }
 
 /** Response containing transitions */

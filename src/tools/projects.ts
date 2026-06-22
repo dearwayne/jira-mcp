@@ -34,10 +34,10 @@ export function createProjectTools(client: JiraClient) {
                                 total: projects.length,
                                 projects: projects.map((p) => ({
                                     key: p.key,
-                                    name: p.name,
+                                    name: p.name ?? null,
                                     id: p.id,
                                     projectType: p.projectTypeKey,
-                                    lead: p.lead?.displayName,
+                                    lead: p.lead?.displayName ?? null,
                                 })),
                             },
                             null,
@@ -60,11 +60,11 @@ export function createProjectTools(client: JiraClient) {
                         text: JSON.stringify(
                             {
                                 key: project.key,
-                                name: project.name,
+                                name: project.name ?? null,
                                 id: project.id,
                                 description: project.description,
                                 projectType: project.projectTypeKey,
-                                lead: project.lead?.displayName,
+                                lead: project.lead?.displayName ?? null,
                             },
                             null,
                             2

@@ -136,6 +136,10 @@ type = "To Do"  → ERROR: "The value 'To Do' does not exist for the field 'type
 
 ## Changelog
 
+### v1.6.1
+- `fix`: null-guard all issue/search/transition/comment field rendering. `jira_get_issue` and `jira_search` no longer throw `Cannot read properties of undefined (reading 'name')` when a ticket has a null/absent `assignee`, `priority`, `status`, `issuetype`, `project`, transition `to`/`statusCategory`, or comment `author`. Missing values now normalize to `null`.
+- `test`: add `test:null` regression test covering null/missing nested fields.
+
 ### v1.6.0
 - `feat`: add attachment access tools `jira_list_attachments` and `jira_get_attachment` (images returned as inline image content blocks; other files saved to a temp path). Legacy Jira Server v2 API only.
 

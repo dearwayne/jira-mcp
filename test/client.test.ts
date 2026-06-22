@@ -103,8 +103,8 @@ async function runTests(): Promise<void> {
             console.log(`✅ Get Issue - PASSED`);
             console.log(`   Key: ${issue.key}`);
             console.log(`   Summary: ${issue.fields.summary}`);
-            console.log(`   Status: ${issue.fields.status.name}`);
-            console.log(`   Type: ${issue.fields.issuetype.name}`);
+            console.log(`   Status: ${issue.fields.status?.name ?? 'N/A'}`);
+            console.log(`   Type: ${issue.fields.issuetype?.name ?? 'N/A'}`);
             passed++;
 
             // Test: Get Transitions
@@ -115,7 +115,7 @@ async function runTests(): Promise<void> {
                 console.log(`✅ Get Transitions - PASSED`);
                 console.log(`   Available transitions for ${issueKey}:`);
                 transitions.transitions.forEach((t) => {
-                    console.log(`     - [${t.id}] ${t.name} → ${t.to.name}`);
+                    console.log(`     - [${t.id}] ${t.name} → ${t.to?.name ?? 'N/A'}`);
                 });
                 passed++;
             } catch (error) {
@@ -131,7 +131,7 @@ async function runTests(): Promise<void> {
                 console.log(`✅ Get Comments - PASSED`);
                 console.log(`   Total comments: ${comments.total}`);
                 if (comments.comments.length > 0) {
-                    console.log(`   Latest comment by: ${comments.comments[0].author.displayName}`);
+                    console.log(`   Latest comment by: ${comments.comments[0].author?.displayName ?? 'N/A'}`);
                 }
                 passed++;
             } catch (error) {

@@ -44,8 +44,8 @@ export function createTransitionTools(client: JiraClient) {
                                 transitions: result.transitions.map((t) => ({
                                     id: t.id,
                                     name: t.name,
-                                    toStatus: t.to.name,
-                                    toStatusCategory: t.to.statusCategory.name,
+                                    toStatus: t.to?.name ?? null,
+                                    toStatusCategory: t.to?.statusCategory?.name ?? null,
                                 })),
                             },
                             null,
