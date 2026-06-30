@@ -3,12 +3,15 @@
  * @file index.ts
  * @description Main entry point for the Jira MCP server.
  * Supports two modes:
- * 1. MCP Server mode (default) - Runs as stdio MCP server for AI tools
+ * 1. MCP Server mode (default) - Runs as HTTP MCP server using Streamable HTTP transport
  * 2. Setup mode - Injects MCP configuration into AI tool config files
  */
 
+import { randomUUID } from 'node:crypto';
+import type { Request, Response } from 'express';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import { createMcpExpressApp } from '@modelcontextprotocol/sdk/server/express.js';
 import {
     CallToolRequestSchema,
     ListToolsRequestSchema,
@@ -58,16 +61,23 @@ function printHelp(): void {
 
 MODES:
 
-  1. MCP Server Mode (default)
-     Run as an MCP server for AI tools to connect to.
-     
+  1. MCP Server Mode (default) - HTTP Streamable Transport
+     Run as an HTTP MCP server using Streamable HTTP transport.
+
      Required Environment Variables:
        JIRA_BASE_URL  - Jira server URL (e.g., https://jira.example.com)
        JIRA_USERNAME  - Username for basic auth
        JIRA_PASSWORD  - Password for basic auth
 
+     Optional Environment Variables:
+       MCP_HOST       - HTTP server host (default: 127.0.0.1)
+       MCP_PORT       - HTTP server port (default: 3000)
+
      Usage:
        npx @khanglvm/jira-mcp
+
+     MCP Endpoint:
+       http://<MCP_HOST>:<MCP_PORT>/mcp
 
   2. Setup Mode
      Inject MCP configuration into AI tool config files.
@@ -84,8 +94,11 @@ COMMANDS:
   --version   Show version
 
 EXAMPLES:
-  # Run as MCP server
+  # Run as HTTP MCP server
   JIRA_BASE_URL=https://jira.example.com JIRA_USERNAME=admin JIRA_PASSWORD=secret npx @khanglvm/jira-mcp
+
+  # Run on custom port
+  MCP_PORT=8080 JIRA_BASE_URL=https://jira.example.com JIRA_USERNAME=admin JIRA_PASSWORD=secret npx @khanglvm/jira-mcp
 
   # Setup for Claude Code
   npx @khanglvm/jira-mcp setup -c claude-code -b https://jira.example.com -u admin -p secret
@@ -260,12 +273,36 @@ async function runMcpServer(): Promise<void> {
         }
     });
 
-    // Create stdio transport and connect
-    const transport = new StdioServerTransport();
+    // Create Streamable HTTP transport
+    const transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: () => randomUUID(), // Stateful mode with session management
+    });
+
     await server.connect(transport);
 
-    // Log successful startup to stderr (not stdout, to avoid interfering with MCP protocol)
-    console.error(`Jira MCP server started - connected to ${config.JIRA_BASE_URL}`);
+    // Create Express app with MCP middleware
+    const app = createMcpExpressApp({
+        host: process.env.MCP_HOST || '127.0.0.1',
+    });
+
+    // Mount MCP handler on /mcp endpoint
+    app.post('/mcp', async (req: Request, res: Response) => {
+        await transport.handleRequest(req, res, req.body);
+    });
+
+    app.get('/mcp', async (req: Request, res: Response) => {
+        await transport.handleRequest(req, res);
+    });
+
+    // Get port from environment variable or use default
+    const port = parseInt(process.env.MCP_PORT || '3000', 10);
+    const host = process.env.MCP_HOST || '127.0.0.1';
+
+    // Start HTTP server
+    app.listen(port, host, () => {
+        console.error(`Jira MCP server started on http://${host}:${port}/mcp`);
+        console.error(`Connected to Jira: ${config.JIRA_BASE_URL}`);
+    });
 }
 
 // Main entry point

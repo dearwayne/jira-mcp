@@ -4,6 +4,8 @@ MCP server for **legacy Jira Server** (v7.x) with Basic Authentication. Works wi
 
 > **Using Jira Cloud or Data Center 8.14+?** Use [mcp-atlassian](https://github.com/sooperset/mcp-atlassian) instead for OAuth/PAT support.
 
+> **Transport**: This server uses **Streamable HTTP transport** (recommended for remote MCP servers). Streamable HTTP is the modern MCP transport introduced in March 2025, offering better compatibility, session management, and resumability compared to legacy HTTP+SSE.
+
 ---
 
 ## Prerequisites
@@ -19,6 +21,51 @@ curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
 ```powershell
 winget install -e --id OpenJS.NodeJS.LTS
 ```
+
+---
+
+## Running the MCP Server
+
+### HTTP Streamable Transport
+
+This server runs as an HTTP server using Streamable HTTP transport, which is the recommended approach for remote MCP servers.
+
+**Starting the server:**
+
+```bash
+# Basic usage
+JIRA_BASE_URL=https://jira.example.com JIRA_USERNAME=admin JIRA_PASSWORD=secret npx @khanglvm/jira-mcp
+
+# Custom port
+MCP_PORT=8080 JIRA_BASE_URL=https://jira.example.com JIRA_USERNAME=admin JIRA_PASSWORD=secret npx @khanglvm/jira-mcp
+
+# Custom host (for remote deployment)
+MCP_HOST=0.0.0.0 MCP_PORT=3000 JIRA_BASE_URL=https://jira.example.com JIRA_USERNAME=admin JIRA_PASSWORD=secret npx @khanglvm/jira-mcp
+```
+
+**Environment Variables:**
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `JIRA_BASE_URL` | yes | - | Jira server URL |
+| `JIRA_USERNAME` | yes | - | Username for basic auth |
+| `JIRA_PASSWORD` | yes | - | Password for basic auth |
+| `MCP_HOST` | no | `127.0.0.1` | HTTP server host |
+| `MCP_PORT` | no | `3000` | HTTP server port |
+| `JIRA_API_VERSION` | no | `2` | API version |
+
+**MCP Endpoint:**
+
+The server exposes a single MCP endpoint: `http://<MCP_HOST>:<MCP_PORT>/mcp`
+
+This endpoint handles both POST requests (for tool calls, list tools, etc.) and GET requests (for SSE streaming when enabled).
+
+**Security Note:**
+
+When deploying to a remote server:
+- The server includes DNS rebinding protection by default when running on localhost
+- For production deployments, consider adding authentication middleware
+- Always use HTTPS in production environments
 
 ---
 
@@ -136,6 +183,21 @@ type = "To Do"  → ERROR: "The value 'To Do' does not exist for the field 'type
 
 ## Changelog
 
+### v1.7.0
+- `feat`: migrate from stdio transport to Streamable HTTP transport (recommended for remote MCP servers)
+- `feat`: add HTTP server configuration with MCP_HOST and MCP_PORT environment variables
+- `feat`: use StreamableHTTPServerTransport for stateful session management
+- `feat`: create Express app with DNS rebinding protection enabled by default
+- `docs`: update README with Streamable HTTP transport documentation and examples
+- `docs`: add HTTP server endpoint information (`http://<MCP_HOST>:<MCP_PORT>/mcp`)
+- `deps`: add @types/express for TypeScript support
+
+**Migration from stdio to Streamable HTTP:**
+- This change transforms the server from a local stdio-based MCP server to a remote HTTP-based server
+- The server now runs on `http://127.0.0.1:3000/mcp` by default (configurable via MCP_HOST and MCP_PORT)
+- Streamable HTTP is the recommended transport for remote MCP servers (introduced March 2025)
+- Supports session management, resumability, and better compatibility with modern MCP clients
+
 ### v1.6.1
 - `fix`: null-guard all issue/search/transition/comment field rendering. `jira_get_issue` and `jira_search` no longer throw `Cannot read properties of undefined (reading 'name')` when a ticket has a null/absent `assignee`, `priority`, `status`, `issuetype`, `project`, transition `to`/`statusCategory`, or comment `author`. Missing values now normalize to `null`.
 - `test`: add `test:null` regression test covering null/missing nested fields.
@@ -153,6 +215,48 @@ type = "To Do"  → ERROR: "The value 'To Do' does not exist for the field 'type
 - `feat`: improve tool descriptions with JQL gotchas and add AI agent skill
 - `fix`: add `.mjs` extension for Node.js ESM compatibility in temporary files
 - `docs`: add `mcpm` quick install instructions and AI agent skill reference
+
+---
+
+## 中文使用说明
+
+### 启动服务器
+
+```bash
+# 基础用法
+JIRA_BASE_URL=https://jira.example.com JIRA_USERNAME=admin JIRA_PASSWORD=secret npx @khanglvm/jira-mcp
+
+# 自定义端口
+MCP_PORT=8080 JIRA_BASE_URL=https://jira.example.com JIRA_USERNAME=admin JIRA_PASSWORD=secret npx @khanglvm/jira-mcp
+
+# 远程部署（监听所有网络接口）
+MCP_HOST=0.0.0.0 MCP_PORT=3000 JIRA_BASE_URL=https://jira.example.com JIRA_USERNAME=admin JIRA_PASSWORD=secret npx @khanglvm/jira-mcp
+```
+
+### 环境变量配置
+
+| 变量 | 必填 | 默认值 | 说明 |
+|------|------|--------|------|
+| `JIRA_BASE_URL` | 是 | - | Jira 服务器地址 |
+| `JIRA_USERNAME` | 是 | - | Basic Auth 用户名 |
+| `JIRA_PASSWORD` | 是 | - | Basic Auth 密码 |
+| `MCP_HOST` | 否 | `127.0.0.1` | HTTP 服务器绑定地址 |
+| `MCP_PORT` | 否 | `3000` | HTTP 服务器端口 |
+| `JIRA_API_VERSION` | 否 | `2` | API 版本 |
+
+### MCP 端点
+
+服务器暴露单一 MCP 端点：`http://<MCP_HOST>:<MCP_PORT>/mcp`
+
+该端点支持：
+- POST 请求：用于工具调用、列出工具等操作
+- GET 请求：用于 SSE 流式传输
+
+### 安全注意事项
+
+- 运行在 localhost 时默认启用 DNS rebinding 保护
+- 生产环境部署时建议添加认证中间件
+- 生产环境应始终使用 HTTPS
 
 ---
 

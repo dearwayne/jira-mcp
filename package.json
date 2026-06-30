@@ -1,7 +1,7 @@
 {
     "name": "@khanglvm/jira-mcp",
-    "version": "1.6.1",
-    "description": "MCP server providing Jira tools with basic authentication support for legacy Jira Server (v7.x and older)",
+    "version": "1.7.0",
+    "description": "MCP server providing Jira tools with basic authentication support for legacy Jira Server (v7.x and older) - using Streamable HTTP transport",
     "type": "module",
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
@@ -30,7 +30,9 @@
         "copilot",
         "basic-auth",
         "jira-server",
-        "legacy"
+        "legacy",
+        "streamable-http",
+        "http-transport"
     ],
     "author": "khanglvm",
     "license": "MIT",
@@ -51,6 +53,7 @@
         "zod": "^3.23.0"
     },
     "devDependencies": {
+        "@types/express": "^5.0.6",
         "@types/js-yaml": "^4.0.9",
         "@types/node": "^20.0.0",
         "dotenv": "^16.4.0",
