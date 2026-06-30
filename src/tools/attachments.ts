@@ -14,6 +14,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { z } from 'zod';
 import { JiraApiError, JiraClient, type JiraAttachment } from '../client.js';
+import { getCredentials } from '../index.js';
 
 /** Max base64 payload size to inline for non-image attachments (256 KB). */
 const MAX_INLINE_BYTES = 256 * 1024;
@@ -69,10 +70,9 @@ async function resolveAttachment(
     client: JiraClient,
     args: z.infer<typeof getAttachmentSchema>
 ): Promise<JiraAttachment> {
-    // Convenience path: resolve by issueKey + filename by listing then matching.
-    // Prefer this when no id is given, since it yields the `content` URL directly.
+    const credentials = getCredentials();
     if (args.issueKey && args.filename) {
-        const attachments = await client.listAttachments(args.issueKey);
+        const attachments = await client.listAttachments(args.issueKey, credentials);
         const match = attachments.find((a) => a.filename === args.filename);
         if (!match) {
             throw new JiraApiError(
@@ -84,17 +84,14 @@ async function resolveAttachment(
     }
 
     if (args.attachmentId) {
-        // If an issueKey is also present, prefer the issue's `fields.attachment`
-        // entry (it carries the absolute `content` URL we download from).
         if (args.issueKey) {
-            const attachments = await client.listAttachments(args.issueKey);
+            const attachments = await client.listAttachments(args.issueKey, credentials);
             const match = attachments.find((a) => a.id === args.attachmentId);
             if (match) {
                 return match;
             }
         }
-        // Otherwise fetch metadata by id via /rest/api/2/attachment/{id}.
-        return client.getAttachmentMeta(args.attachmentId);
+        return client.getAttachmentMeta(args.attachmentId, credentials);
     }
 
     throw new JiraApiError(
@@ -114,7 +111,8 @@ export function createAttachmentTools(client: JiraClient) {
          * Lists attachments on an issue.
          */
         jira_list_attachments: async (args: z.infer<typeof listAttachmentsSchema>) => {
-            const attachments = await client.listAttachments(args.issueKey);
+            const credentials = getCredentials();
+            const attachments = await client.listAttachments(args.issueKey, credentials);
 
             if (attachments.length === 0) {
                 return {
@@ -163,7 +161,8 @@ export function createAttachmentTools(client: JiraClient) {
          */
         jira_get_attachment: async (args: z.infer<typeof getAttachmentSchema>) => {
             const meta = await resolveAttachment(client, args);
-            const { buffer } = await client.downloadAttachment(meta.content);
+            const credentials = getCredentials();
+            const { buffer } = await client.downloadAttachment(meta.content, credentials);
 
             // Prefer Jira's declared mimeType; it is authoritative for legacy server.
             const mimeType = meta.mimeType || 'application/octet-stream';

@@ -4,7 +4,7 @@
  * Provides typed methods for interacting with Jira Server v7.x API.
  */
 
-import { JiraConfig, getApiBaseUrl, getAuthBaseUrl } from './config.js';
+import { JiraConfig, JiraCredentials, getApiBaseUrl, getAuthBaseUrl } from './config.js';
 
 /**
  * Error thrown when Jira API requests fail.
@@ -27,11 +27,12 @@ type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE';
 
 /**
  * Jira REST API client with basic authentication.
+ * Supports dynamic credentials that can be provided per-request.
  */
 export class JiraClient {
     private readonly apiBaseUrl: string;
     private readonly authBaseUrl: string;
-    private readonly authHeader: string;
+    private readonly defaultAuthHeader: string | null;
 
     /**
      * Creates a new Jira client instance.
@@ -40,10 +41,36 @@ export class JiraClient {
     constructor(private readonly config: JiraConfig) {
         this.apiBaseUrl = getApiBaseUrl(config);
         this.authBaseUrl = getAuthBaseUrl(config);
-        // Generate Basic auth header: base64(username:password)
-        this.authHeader = `Basic ${Buffer.from(
-            `${config.JIRA_USERNAME}:${config.JIRA_PASSWORD}`
+        if (config.JIRA_USERNAME && config.JIRA_PASSWORD) {
+            this.defaultAuthHeader = `Basic ${Buffer.from(
+                `${config.JIRA_USERNAME}:${config.JIRA_PASSWORD}`
+            ).toString('base64')}`;
+        } else {
+            this.defaultAuthHeader = null;
+        }
+    }
+
+    /**
+     * Creates an auth header from credentials.
+     */
+    private createAuthHeader(credentials: JiraCredentials): string {
+        return `Basic ${Buffer.from(
+            `${credentials.username}:${credentials.password}`
         ).toString('base64')}`;
+    }
+
+    /**
+     * Gets the auth header to use for requests.
+     * Uses session credentials if provided, otherwise falls back to default config.
+     */
+    private getAuthHeader(credentials?: JiraCredentials): string {
+        if (credentials) {
+            return this.createAuthHeader(credentials);
+        }
+        if (this.defaultAuthHeader) {
+            return this.defaultAuthHeader;
+        }
+        throw new Error('Jira credentials not provided. Please configure JIRA_USERNAME and JIRA_PASSWORD in server environment or provide them via MCP client configuration.');
     }
 
     /**
@@ -52,19 +79,21 @@ export class JiraClient {
      * @param path - API path (relative to base URL)
      * @param body - Optional request body
      * @param useAuthEndpoint - Whether to use auth endpoint instead of api endpoint
+     * @param credentials - Optional credentials to use for this request
      * @returns Parsed JSON response
      */
     private async request<T>(
         method: HttpMethod,
         path: string,
         body?: unknown,
-        useAuthEndpoint = false
+        useAuthEndpoint = false,
+        credentials?: JiraCredentials
     ): Promise<T> {
         const baseUrl = useAuthEndpoint ? this.authBaseUrl : this.apiBaseUrl;
         const url = `${baseUrl}${path}`;
 
         const headers: Record<string, string> = {
-            Authorization: this.authHeader,
+            Authorization: this.getAuthHeader(credentials),
             Accept: 'application/json',
         };
 
@@ -115,10 +144,11 @@ export class JiraClient {
 
     /**
      * Gets current authenticated user session info.
+     * @param credentials - Optional credentials to use for this request
      * @returns Current user session data
      */
-    async getCurrentSession(): Promise<JiraSession> {
-        return this.request<JiraSession>('GET', '/session', undefined, true);
+    async getCurrentSession(credentials?: JiraCredentials): Promise<JiraSession> {
+        return this.request<JiraSession>('GET', '/session', undefined, true, credentials);
     }
 
     // ============ Issue Methods ============
@@ -128,67 +158,74 @@ export class JiraClient {
      * @param issueIdOrKey - Issue key (e.g., "PROJ-123") or ID
      * @param fields - Optional comma-separated list of fields to return
      * @param expand - Optional fields to expand
+     * @param credentials - Optional credentials to use for this request
      * @returns Issue data
      */
     async getIssue(
         issueIdOrKey: string,
         fields?: string,
-        expand?: string
+        expand?: string,
+        credentials?: JiraCredentials
     ): Promise<JiraIssue> {
         const params = new URLSearchParams();
         if (fields) params.set('fields', fields);
         if (expand) params.set('expand', expand);
         const query = params.toString() ? `?${params.toString()}` : '';
-        return this.request<JiraIssue>('GET', `/issue/${issueIdOrKey}${query}`);
+        return this.request<JiraIssue>('GET', `/issue/${issueIdOrKey}${query}`, undefined, false, credentials);
     }
 
     /**
      * Creates a new issue.
      * @param data - Issue creation data
+     * @param credentials - Optional credentials to use for this request
      * @returns Created issue reference
      */
-    async createIssue(data: CreateIssueInput): Promise<CreatedIssue> {
-        return this.request<CreatedIssue>('POST', '/issue', { fields: data });
+    async createIssue(data: CreateIssueInput, credentials?: JiraCredentials): Promise<CreatedIssue> {
+        return this.request<CreatedIssue>('POST', '/issue', { fields: data }, false, credentials);
     }
 
     /**
      * Updates an existing issue.
      * @param issueIdOrKey - Issue key or ID
      * @param data - Fields to update
+     * @param credentials - Optional credentials to use for this request
      */
-    async updateIssue(issueIdOrKey: string, data: UpdateIssueInput): Promise<void> {
-        await this.request<void>('PUT', `/issue/${issueIdOrKey}`, { fields: data });
+    async updateIssue(issueIdOrKey: string, data: UpdateIssueInput, credentials?: JiraCredentials): Promise<void> {
+        await this.request<void>('PUT', `/issue/${issueIdOrKey}`, { fields: data }, false, credentials);
     }
 
     /**
      * Deletes an issue.
      * @param issueIdOrKey - Issue key or ID
      * @param deleteSubtasks - Whether to delete subtasks
+     * @param credentials - Optional credentials to use for this request
      */
-    async deleteIssue(issueIdOrKey: string, deleteSubtasks = false): Promise<void> {
+    async deleteIssue(issueIdOrKey: string, deleteSubtasks = false, credentials?: JiraCredentials): Promise<void> {
         const query = deleteSubtasks ? '?deleteSubtasks=true' : '';
-        await this.request<void>('DELETE', `/issue/${issueIdOrKey}${query}`);
+        await this.request<void>('DELETE', `/issue/${issueIdOrKey}${query}`, undefined, false, credentials);
     }
 
     /**
      * Gets comments on an issue.
      * @param issueIdOrKey - Issue key or ID
+     * @param credentials - Optional credentials to use for this request
      * @returns Comments data
      */
-    async getComments(issueIdOrKey: string): Promise<CommentsResponse> {
-        return this.request<CommentsResponse>('GET', `/issue/${issueIdOrKey}/comment`);
+    async getComments(issueIdOrKey: string, credentials?: JiraCredentials): Promise<CommentsResponse> {
+        return this.request<CommentsResponse>('GET', `/issue/${issueIdOrKey}/comment`, undefined, false, credentials);
     }
 
     /**
      * Adds a comment to an issue.
      * @param issueIdOrKey - Issue key or ID
      * @param body - Comment body text
+     * @param credentials - Optional credentials to use for this request
      * @returns Created comment
      */
-    async addComment(issueIdOrKey: string, body: string): Promise<JiraComment> {
+    async addComment(issueIdOrKey: string, body: string, credentials?: JiraCredentials): Promise<JiraComment> {
         return this.request<JiraComment>('POST', `/issue/${issueIdOrKey}/comment`, {
             body,
-        });
+        }, false, credentials);
     }
 
     // ============ Transition Methods ============
@@ -196,12 +233,16 @@ export class JiraClient {
     /**
      * Gets available transitions for an issue.
      * @param issueIdOrKey - Issue key or ID
+     * @param credentials - Optional credentials to use for this request
      * @returns Available transitions
      */
-    async getTransitions(issueIdOrKey: string): Promise<TransitionsResponse> {
+    async getTransitions(issueIdOrKey: string, credentials?: JiraCredentials): Promise<TransitionsResponse> {
         return this.request<TransitionsResponse>(
             'GET',
-            `/issue/${issueIdOrKey}/transitions`
+            `/issue/${issueIdOrKey}/transitions`,
+            undefined,
+            false,
+            credentials
         );
     }
 
@@ -210,11 +251,13 @@ export class JiraClient {
      * @param issueIdOrKey - Issue key or ID
      * @param transitionId - ID of the transition to execute
      * @param comment - Optional comment to add
+     * @param credentials - Optional credentials to use for this request
      */
     async transitionIssue(
         issueIdOrKey: string,
         transitionId: string,
-        comment?: string
+        comment?: string,
+        credentials?: JiraCredentials
     ): Promise<void> {
         const body: TransitionInput = {
             transition: { id: transitionId },
@@ -224,7 +267,7 @@ export class JiraClient {
                 comment: [{ add: { body: comment } }],
             };
         }
-        await this.request<void>('POST', `/issue/${issueIdOrKey}/transitions`, body);
+        await this.request<void>('POST', `/issue/${issueIdOrKey}/transitions`, body, false, credentials);
     }
 
     // ============ Search Methods ============
@@ -235,58 +278,64 @@ export class JiraClient {
      * @param maxResults - Maximum results to return (default 50)
      * @param startAt - Starting index for pagination
      * @param fields - Fields to include in results
+     * @param credentials - Optional credentials to use for this request
      * @returns Search results
      */
     async search(
         jql: string,
         maxResults = 50,
         startAt = 0,
-        fields?: string[]
+        fields?: string[],
+        credentials?: JiraCredentials
     ): Promise<SearchResponse> {
         return this.request<SearchResponse>('POST', '/search', {
             jql,
             maxResults,
             startAt,
             fields: fields ?? ['summary', 'status', 'assignee', 'priority', 'issuetype'],
-        });
+        }, false, credentials);
     }
 
     // ============ Project Methods ============
 
     /**
      * Gets all accessible projects.
+     * @param credentials - Optional credentials to use for this request
      * @returns List of projects
      */
-    async getProjects(): Promise<JiraProject[]> {
-        return this.request<JiraProject[]>('GET', '/project');
+    async getProjects(credentials?: JiraCredentials): Promise<JiraProject[]> {
+        return this.request<JiraProject[]>('GET', '/project', undefined, false, credentials);
     }
 
     /**
      * Gets a project by key or ID.
      * @param projectIdOrKey - Project key or ID
+     * @param credentials - Optional credentials to use for this request
      * @returns Project data
      */
-    async getProject(projectIdOrKey: string): Promise<JiraProject> {
-        return this.request<JiraProject>('GET', `/project/${projectIdOrKey}`);
+    async getProject(projectIdOrKey: string, credentials?: JiraCredentials): Promise<JiraProject> {
+        return this.request<JiraProject>('GET', `/project/${projectIdOrKey}`, undefined, false, credentials);
     }
 
     // ============ User Methods ============
 
     /**
      * Gets the currently authenticated user.
+     * @param credentials - Optional credentials to use for this request
      * @returns Current user data
      */
-    async getCurrentUser(): Promise<JiraUser> {
-        return this.request<JiraUser>('GET', '/myself');
+    async getCurrentUser(credentials?: JiraCredentials): Promise<JiraUser> {
+        return this.request<JiraUser>('GET', '/myself', undefined, false, credentials);
     }
 
     /**
      * Gets a user by username.
      * @param username - Username to look up
+     * @param credentials - Optional credentials to use for this request
      * @returns User data
      */
-    async getUser(username: string): Promise<JiraUser> {
-        return this.request<JiraUser>('GET', `/user?username=${encodeURIComponent(username)}`);
+    async getUser(username: string, credentials?: JiraCredentials): Promise<JiraUser> {
+        return this.request<JiraUser>('GET', `/user?username=${encodeURIComponent(username)}`, undefined, false, credentials);
     }
 
     // ============ Attachment Methods ============
@@ -296,11 +345,12 @@ export class JiraClient {
      * Reads from the issue's `fields.attachment[]` array via
      * `GET /rest/api/2/issue/{key}?fields=attachment` (legacy Jira Server v2 API).
      * @param issueIdOrKey - Issue key (e.g., "PROJ-123") or ID
+     * @param credentials - Optional credentials to use for this request
      * @returns Array of attachment metadata (empty if the issue has no attachments)
      */
-    async listAttachments(issueIdOrKey: string): Promise<JiraAttachment[]> {
+    async listAttachments(issueIdOrKey: string, credentials?: JiraCredentials): Promise<JiraAttachment[]> {
         // Restrict the field set to `attachment` to keep the response small.
-        const issue = await this.getIssue(issueIdOrKey, 'attachment');
+        const issue = await this.getIssue(issueIdOrKey, 'attachment', undefined, credentials);
         // `fields.attachment` is absent when attachments are disabled or none exist.
         const attachments = issue.fields.attachment as JiraAttachment[] | undefined;
         return Array.isArray(attachments) ? attachments : [];
@@ -310,12 +360,16 @@ export class JiraClient {
      * Gets metadata for a single attachment by its numeric id.
      * Uses `GET /rest/api/2/attachment/{id}` (legacy Jira Server v2 API).
      * @param attachmentId - Numeric attachment id
+     * @param credentials - Optional credentials to use for this request
      * @returns Attachment metadata, including the absolute `content` download URL
      */
-    async getAttachmentMeta(attachmentId: string): Promise<JiraAttachment> {
+    async getAttachmentMeta(attachmentId: string, credentials?: JiraCredentials): Promise<JiraAttachment> {
         return this.request<JiraAttachment>(
             'GET',
-            `/attachment/${encodeURIComponent(attachmentId)}`
+            `/attachment/${encodeURIComponent(attachmentId)}`,
+            undefined,
+            false,
+            credentials
         );
     }
 
@@ -330,16 +384,18 @@ export class JiraClient {
      * (fetch default).
      *
      * @param contentUrl - Absolute download URL (the attachment's `content` field)
+     * @param credentials - Optional credentials to use for this request
      * @returns The downloaded bytes plus the reported content type
      * @throws {JiraApiError} If the download fails (e.g. 401/403/404)
      */
     async downloadAttachment(
-        contentUrl: string
+        contentUrl: string,
+        credentials?: JiraCredentials
     ): Promise<{ buffer: Buffer; contentType: string }> {
         const response = await fetch(contentUrl, {
             method: 'GET',
             headers: {
-                Authorization: this.authHeader,
+                Authorization: this.getAuthHeader(credentials),
             },
             // fetch follows redirects by default; Jira serves attachment bytes
             // via a redirect to /secure/attachment/... which we must follow.

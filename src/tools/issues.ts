@@ -6,6 +6,7 @@
 
 import { z } from 'zod';
 import { JiraClient } from '../client.js';
+import { getCredentials } from '../index.js';
 
 /**
  * Schema for get_issue tool input.
@@ -87,7 +88,8 @@ export function createIssueTools(client: JiraClient) {
          * Gets an issue by key or ID.
          */
         jira_get_issue: async (args: z.infer<typeof getIssueSchema>) => {
-            const issue = await client.getIssue(args.issueKey, args.fields);
+            const credentials = getCredentials();
+            const issue = await client.getIssue(args.issueKey, args.fields, undefined, credentials);
             return {
                 content: [
                     {
@@ -120,6 +122,7 @@ export function createIssueTools(client: JiraClient) {
          * Creates a new issue.
          */
         jira_create_issue: async (args: z.infer<typeof createIssueSchema>) => {
+            const credentials = getCredentials();
             const result = await client.createIssue({
                 project: { key: args.projectKey },
                 summary: args.summary,
@@ -128,7 +131,7 @@ export function createIssueTools(client: JiraClient) {
                 assignee: args.assignee ? { name: args.assignee } : undefined,
                 priority: args.priority ? { name: args.priority } : undefined,
                 labels: args.labels,
-            });
+            }, credentials);
             return {
                 content: [
                     {
@@ -152,13 +155,14 @@ export function createIssueTools(client: JiraClient) {
          * Updates an existing issue.
          */
         jira_update_issue: async (args: z.infer<typeof updateIssueSchema>) => {
+            const credentials = getCredentials();
             await client.updateIssue(args.issueKey, {
                 summary: args.summary,
                 description: args.description,
                 assignee: args.assignee === null ? null : args.assignee ? { name: args.assignee } : undefined,
                 priority: args.priority ? { name: args.priority } : undefined,
                 labels: args.labels,
-            });
+            }, credentials);
             return {
                 content: [
                     {
@@ -180,7 +184,8 @@ export function createIssueTools(client: JiraClient) {
          * Deletes an issue.
          */
         jira_delete_issue: async (args: z.infer<typeof deleteIssueSchema>) => {
-            await client.deleteIssue(args.issueKey, args.deleteSubtasks);
+            const credentials = getCredentials();
+            await client.deleteIssue(args.issueKey, args.deleteSubtasks, credentials);
             return {
                 content: [
                     {
@@ -202,7 +207,8 @@ export function createIssueTools(client: JiraClient) {
          * Adds a comment to an issue.
          */
         jira_add_comment: async (args: z.infer<typeof addCommentSchema>) => {
-            const comment = await client.addComment(args.issueKey, args.body);
+            const credentials = getCredentials();
+            const comment = await client.addComment(args.issueKey, args.body, credentials);
             return {
                 content: [
                     {
@@ -226,7 +232,8 @@ export function createIssueTools(client: JiraClient) {
          * Gets comments on an issue.
          */
         jira_get_comments: async (args: z.infer<typeof getCommentsSchema>) => {
-            const result = await client.getComments(args.issueKey);
+            const credentials = getCredentials();
+            const result = await client.getComments(args.issueKey, credentials);
             return {
                 content: [
                     {

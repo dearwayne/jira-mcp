@@ -5,6 +5,7 @@
 
 import { z } from 'zod';
 import { JiraClient } from '../client.js';
+import { getCredentials } from '../index.js';
 
 /**
  * Schema for get_user tool input.
@@ -24,7 +25,8 @@ export function createUserTools(client: JiraClient) {
          * Gets the currently authenticated user.
          */
         jira_get_current_user: async () => {
-            const user = await client.getCurrentUser();
+            const credentials = getCredentials();
+            const user = await client.getCurrentUser(credentials);
             return {
                 content: [
                     {
@@ -49,7 +51,8 @@ export function createUserTools(client: JiraClient) {
          * Gets a user by username.
          */
         jira_get_user: async (args: z.infer<typeof getUserSchema>) => {
-            const user = await client.getUser(args.username);
+            const credentials = getCredentials();
+            const user = await client.getUser(args.username, credentials);
             return {
                 content: [
                     {

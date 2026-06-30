@@ -5,6 +5,7 @@
 
 import { z } from 'zod';
 import { JiraClient } from '../client.js';
+import { getCredentials } from '../index.js';
 
 /**
  * Schema for search tool input.
@@ -41,11 +42,13 @@ export function createSearchTools(client: JiraClient) {
          * Searches for issues using JQL.
          */
         jira_search: async (args: z.infer<typeof searchSchema>) => {
+            const credentials = getCredentials();
             const result = await client.search(
                 args.jql,
                 args.maxResults,
                 args.startAt,
-                args.fields
+                args.fields,
+                credentials
             );
             return {
                 content: [

@@ -5,6 +5,7 @@
 
 import { z } from 'zod';
 import { JiraClient } from '../client.js';
+import { getCredentials } from '../index.js';
 
 /**
  * Schema for get_project tool input.
@@ -24,7 +25,8 @@ export function createProjectTools(client: JiraClient) {
          * Lists all accessible projects.
          */
         jira_list_projects: async () => {
-            const projects = await client.getProjects();
+            const credentials = getCredentials();
+            const projects = await client.getProjects(credentials);
             return {
                 content: [
                     {
@@ -52,7 +54,8 @@ export function createProjectTools(client: JiraClient) {
          * Gets a project by key or ID.
          */
         jira_get_project: async (args: z.infer<typeof getProjectSchema>) => {
-            const project = await client.getProject(args.projectKey);
+            const credentials = getCredentials();
+            const project = await client.getProject(args.projectKey, credentials);
             return {
                 content: [
                     {

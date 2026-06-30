@@ -8,16 +8,11 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import type { Request, Response } from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { createMcpExpressApp } from '@modelcontextprotocol/sdk/server/express.js';
-import {
-    CallToolRequestSchema,
-    ListToolsRequestSchema,
-} from '@modelcontextprotocol/sdk/types.js';
-
-import { loadConfig } from './config.js';
+import { loadConfig, JiraCredentials } from './config.js';
 import { JiraClient, JiraApiError } from './client.js';
 // Export MCP registry types for external use
 export * from './types/mcp-config.js';
@@ -66,10 +61,10 @@ MODES:
 
      Required Environment Variables:
        JIRA_BASE_URL  - Jira server URL (e.g., https://jira.example.com)
-       JIRA_USERNAME  - Username for basic auth
-       JIRA_PASSWORD  - Password for basic auth
 
      Optional Environment Variables:
+       JIRA_USERNAME  - Username for basic auth (can be provided by MCP clients)
+       JIRA_PASSWORD  - Password for basic auth (can be provided by MCP clients)
        MCP_HOST       - HTTP server host (default: 127.0.0.1)
        MCP_PORT       - HTTP server port (default: 3000)
 
@@ -78,6 +73,15 @@ MODES:
 
      MCP Endpoint:
        http://<MCP_HOST>:<MCP_PORT>/mcp
+
+     Client-Side Credentials:
+       JIRA_USERNAME and JIRA_PASSWORD can be provided by MCP clients during
+       the initialize request instead of being configured on the server.
+       See README.md for details on how to configure client credentials.
+
+     Server-Side Credentials (alternative):
+       If JIRA_USERNAME and JIRA_PASSWORD are set on the server, they will
+       be used as default credentials for all sessions.
 
   2. Setup Mode
      Inject MCP configuration into AI tool config files.
@@ -172,11 +176,36 @@ async function handleCliCommands(): Promise<boolean> {
     }
 }
 
+import { AsyncLocalStorage } from 'node:async_hooks';
+import { z } from 'zod';
+import {
+    CallToolRequestSchema,
+    ListToolsRequestSchema,
+    InitializeRequestSchema,
+} from '@modelcontextprotocol/sdk/types.js';
+
+/**
+ * AsyncLocalStorage for storing credentials in the request context.
+ */
+const credentialsStorage = new AsyncLocalStorage<JiraCredentials | undefined>();
+
+/**
+ * Gets credentials for the current request context.
+ */
+export function getCredentials(): JiraCredentials | undefined {
+    return credentialsStorage.getStore();
+}
+
+/**
+ * Session storage for Jira credentials.
+ * Maps session IDs to credentials provided by MCP clients.
+ */
+const sessionCredentials = new Map<string, JiraCredentials>();
+
 /**
  * Main function to initialize and run the MCP server.
  */
 async function runMcpServer(): Promise<void> {
-    // Load and validate configuration from environment
     let config;
     try {
         config = loadConfig();
@@ -185,10 +214,8 @@ async function runMcpServer(): Promise<void> {
         process.exit(1);
     }
 
-    // Initialize Jira client
     const jiraClient = new JiraClient(config);
 
-    // Create tool handlers
     const issueTools = createIssueTools(jiraClient);
     const searchTools = createSearchTools(jiraClient);
     const projectTools = createProjectTools(jiraClient);
@@ -196,9 +223,6 @@ async function runMcpServer(): Promise<void> {
     const userTools = createUserTools(jiraClient);
     const attachmentTools = createAttachmentTools(jiraClient);
 
-    // Combine all tool handlers with type assertion
-    // Individual handlers have stricter param types, but we know the SDK will provide correct args.
-    // Content blocks may be text OR image (attachment tools), so the type is loose here.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const allToolHandlers: Record<string, (args: any) => Promise<{ content: Array<Record<string, unknown>> }>> = {
         ...issueTools,
@@ -209,7 +233,6 @@ async function runMcpServer(): Promise<void> {
         ...attachmentTools,
     };
 
-    // Combine all tool definitions
     const allToolDefinitions = [
         ...issueToolDefinitions,
         ...searchToolDefinitions,
@@ -219,23 +242,46 @@ async function runMcpServer(): Promise<void> {
         ...attachmentToolDefinitions,
     ];
 
-    // Create MCP server
     const server = new Server(SERVER_INFO, {
         capabilities: {
             tools: {},
         },
     });
 
-    // Register list_tools handler
     server.setRequestHandler(ListToolsRequestSchema, async () => {
         return {
             tools: allToolDefinitions,
         };
     });
 
-    // Register call_tool handler
-    server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    server.setRequestHandler(InitializeRequestSchema, async (request) => {
+        const params = request.params as Record<string, unknown>;
+        const sessionId = (request as Record<string, unknown>).sessionId as string | undefined;
+
+        const meta = params._meta as Record<string, unknown> | undefined;
+        const creds = meta?.credentials as Record<string, string> | undefined;
+
+        if (sessionId && creds?.username && creds?.password) {
+            sessionCredentials.set(sessionId, {
+                username: creds.username,
+                password: creds.password,
+            });
+            console.error(`[Session ${sessionId}] Credentials received`);
+        }
+
+        return {
+            capabilities: {
+                tools: {},
+            },
+            protocolVersion: '2025-11-25',
+        };
+    });
+
+    server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
         const { name, arguments: args } = request.params;
+        const sessionId = extra?.sessionId;
+
+        const credentials = sessionId ? sessionCredentials.get(sessionId) : undefined;
 
         const handler = allToolHandlers[name];
         if (!handler) {
@@ -243,10 +289,11 @@ async function runMcpServer(): Promise<void> {
         }
 
         try {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            return await handler(args as any);
+            return await credentialsStorage.run(credentials, async () => {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                return await handler(args as any);
+            });
         } catch (error) {
-            // Handle Jira API errors gracefully
             if (error instanceof JiraApiError) {
                 return {
                     content: [
@@ -267,25 +314,20 @@ async function runMcpServer(): Promise<void> {
                     isError: true,
                 };
             }
-
-            // Re-throw unexpected errors
             throw error;
         }
     });
 
-    // Create Streamable HTTP transport
     const transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: () => randomUUID(), // Stateful mode with session management
+        sessionIdGenerator: () => randomUUID(),
     });
 
     await server.connect(transport);
 
-    // Create Express app with MCP middleware
     const app = createMcpExpressApp({
         host: process.env.MCP_HOST || '127.0.0.1',
     });
 
-    // Mount MCP handler on /mcp endpoint
     app.post('/mcp', async (req: Request, res: Response) => {
         await transport.handleRequest(req, res, req.body);
     });
@@ -294,14 +336,15 @@ async function runMcpServer(): Promise<void> {
         await transport.handleRequest(req, res);
     });
 
-    // Get port from environment variable or use default
     const port = parseInt(process.env.MCP_PORT || '3000', 10);
     const host = process.env.MCP_HOST || '127.0.0.1';
 
-    // Start HTTP server
     app.listen(port, host, () => {
         console.error(`Jira MCP server started on http://${host}:${port}/mcp`);
         console.error(`Connected to Jira: ${config.JIRA_BASE_URL}`);
+        if (!config.JIRA_USERNAME || !config.JIRA_PASSWORD) {
+            console.error('Note: JIRA_USERNAME and JIRA_PASSWORD not configured on server. Credentials must be provided by MCP clients via initialize request.');
+        }
     });
 }
 

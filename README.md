@@ -48,11 +48,51 @@ MCP_HOST=0.0.0.0 MCP_PORT=3000 JIRA_BASE_URL=https://jira.example.com JIRA_USERN
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `JIRA_BASE_URL` | yes | - | Jira server URL |
-| `JIRA_USERNAME` | yes | - | Username for basic auth |
-| `JIRA_PASSWORD` | yes | - | Password for basic auth |
+| `JIRA_USERNAME` | no | - | Username for basic auth (can be provided by MCP clients) |
+| `JIRA_PASSWORD` | no | - | Password for basic auth (can be provided by MCP clients) |
 | `MCP_HOST` | no | `127.0.0.1` | HTTP server host |
 | `MCP_PORT` | no | `3000` | HTTP server port |
 | `JIRA_API_VERSION` | no | `2` | API version |
+
+### Client-Side Credentials
+
+Jira credentials can be provided by MCP clients during the initialize request instead of being configured on the server. This is useful when:
+- The server is shared among multiple users
+- Each user has their own Jira credentials
+- You want to avoid storing credentials on the server
+
+**How it works:**
+1. Start the server without `JIRA_USERNAME` and `JIRA_PASSWORD` environment variables
+2. MCP clients provide credentials in the `_meta` field during initialization
+3. Credentials are stored per-session and used for all subsequent tool calls
+
+**Example MCP client configuration:**
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "initialize",
+  "params": {
+    "protocolVersion": "2025-11-25",
+    "capabilities": {},
+    "clientInfo": {
+      "name": "your-client",
+      "version": "1.0.0"
+    },
+    "_meta": {
+      "credentials": {
+        "username": "jira-user",
+        "password": "jira-password"
+      }
+    }
+  }
+}
+```
+
+**Security Note:**
+- Credentials are stored in memory only (not persisted)
+- Each session has its own set of credentials
+- Credentials are automatically cleared when the session ends
 
 **MCP Endpoint:**
 

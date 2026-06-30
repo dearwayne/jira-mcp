@@ -9,14 +9,15 @@ import { z } from 'zod';
 /**
  * Environment variable schema for Jira configuration.
  * Validates required and optional configuration values.
+ * JIRA_USERNAME and JIRA_PASSWORD are optional - they can be provided via MCP client configuration.
  */
 const configSchema = z.object({
     /** Base URL of the Jira instance (e.g., http://jira.example.com:8080) */
     JIRA_BASE_URL: z.string().url('JIRA_BASE_URL must be a valid URL'),
-    /** Username for basic authentication */
-    JIRA_USERNAME: z.string().min(1, 'JIRA_USERNAME is required'),
-    /** Password for basic authentication */
-    JIRA_PASSWORD: z.string().min(1, 'JIRA_PASSWORD is required'),
+    /** Username for basic authentication (optional - can be provided via MCP client) */
+    JIRA_USERNAME: z.string().optional(),
+    /** Password for basic authentication (optional - can be provided via MCP client) */
+    JIRA_PASSWORD: z.string().optional(),
     /** API version (defaults to "2") */
     JIRA_API_VERSION: z.string().default('2'),
 });
@@ -25,6 +26,14 @@ const configSchema = z.object({
  * Validated configuration type inferred from schema.
  */
 export type JiraConfig = z.infer<typeof configSchema>;
+
+/**
+ * Jira authentication credentials.
+ */
+export interface JiraCredentials {
+    username: string;
+    password: string;
+}
 
 /**
  * Loads and validates configuration from environment variables.
@@ -47,9 +56,9 @@ export function loadConfig(): JiraConfig {
             `Jira MCP configuration error:\n${errors}\n\n` +
             'Required environment variables:\n' +
             '  JIRA_BASE_URL - Base URL of Jira instance\n' +
-            '  JIRA_USERNAME - Username for authentication\n' +
-            '  JIRA_PASSWORD - Password for authentication\n' +
             '\nOptional:\n' +
+            '  JIRA_USERNAME - Username for authentication (can be provided via MCP client)\n' +
+            '  JIRA_PASSWORD - Password for authentication (can be provided via MCP client)\n' +
             '  JIRA_API_VERSION - API version (default: "2")'
         );
     }

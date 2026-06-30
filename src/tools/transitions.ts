@@ -5,6 +5,7 @@
 
 import { z } from 'zod';
 import { JiraClient } from '../client.js';
+import { getCredentials } from '../index.js';
 
 /**
  * Schema for get_transitions tool input.
@@ -33,7 +34,8 @@ export function createTransitionTools(client: JiraClient) {
          * Gets available transitions for an issue.
          */
         jira_get_transitions: async (args: z.infer<typeof getTransitionsSchema>) => {
-            const result = await client.getTransitions(args.issueKey);
+            const credentials = getCredentials();
+            const result = await client.getTransitions(args.issueKey, credentials);
             return {
                 content: [
                     {
@@ -60,7 +62,8 @@ export function createTransitionTools(client: JiraClient) {
          * Transitions an issue to a new status.
          */
         jira_transition_issue: async (args: z.infer<typeof transitionIssueSchema>) => {
-            await client.transitionIssue(args.issueKey, args.transitionId, args.comment);
+            const credentials = getCredentials();
+            await client.transitionIssue(args.issueKey, args.transitionId, args.comment, credentials);
             return {
                 content: [
                     {
