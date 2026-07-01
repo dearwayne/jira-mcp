@@ -33,14 +33,37 @@ This server runs as an HTTP server using Streamable HTTP transport, which is the
 **Starting the server:**
 
 ```bash
-# Basic usage
+# Basic usage (credentials provided by MCP clients)
+JIRA_BASE_URL=https://jira.example.com npx @khanglvm/jira-mcp
+
+# With server-side credentials (optional)
 JIRA_BASE_URL=https://jira.example.com JIRA_USERNAME=admin JIRA_PASSWORD=secret npx @khanglvm/jira-mcp
 
 # Custom port
-MCP_PORT=8080 JIRA_BASE_URL=https://jira.example.com JIRA_USERNAME=admin JIRA_PASSWORD=secret npx @khanglvm/jira-mcp
+MCP_PORT=8080 JIRA_BASE_URL=https://jira.example.com npx @khanglvm/jira-mcp
 
 # Custom host (for remote deployment)
-MCP_HOST=0.0.0.0 MCP_PORT=3000 JIRA_BASE_URL=https://jira.example.com JIRA_USERNAME=admin JIRA_PASSWORD=secret npx @khanglvm/jira-mcp
+MCP_HOST=0.0.0.0 MCP_PORT=3000 JIRA_BASE_URL=https://jira.example.com npx @khanglvm/jira-mcp
+```
+
+**Running from local source (development):**
+
+```bash
+# Clone and install
+git clone https://github.com/khanglvm/jira-mcp.git
+cd jira-mcp
+npm install
+npm run build
+
+# Run local version (credentials provided by MCP clients)
+JIRA_BASE_URL=https://jira.example.com node dist/index.js
+
+# Run with server-side credentials (optional)
+JIRA_BASE_URL=https://jira.example.com JIRA_USERNAME=admin JIRA_PASSWORD=secret node dist/index.js
+
+# Link local version globally
+npm link
+JIRA_BASE_URL=https://jira.example.com jira-mcp
 ```
 
 **Environment Variables:**
@@ -93,6 +116,92 @@ Jira credentials can be provided by MCP clients during the initialize request in
 - Credentials are stored in memory only (not persisted)
 - Each session has its own set of credentials
 - Credentials are automatically cleared when the session ends
+
+### Client Configuration Examples
+
+#### Cursor
+
+Add the following to your Cursor MCP configuration (Settings > MCP Servers):
+
+```json
+{
+  "mcpServers": {
+    "jira": {
+      "command": "npx",
+      "args": ["-y", "@khanglvm/jira-mcp"],
+      "env": {
+        "JIRA_BASE_URL": "https://jira.example.com"
+      }
+    }
+  }
+}
+```
+
+Or connect to a running server:
+
+```json
+{
+  "mcpServers": {
+    "jira": {
+      "url": "http://127.0.0.1:3000/mcp"
+    }
+  }
+}
+```
+
+#### Claude Code
+
+Configure in `~/.anthropic/claude-code/mcp.json`:
+
+```json
+{
+  "servers": {
+    "jira": {
+      "command": "npx",
+      "args": ["-y", "@khanglvm/jira-mcp"],
+      "env": {
+        "JIRA_BASE_URL": "https://jira.example.com"
+      }
+    }
+  }
+}
+```
+
+#### VS Code (GitHub Copilot)
+
+Configure in your settings JSON:
+
+```json
+{
+  "github.copilot.mcp.servers": {
+    "jira": {
+      "command": "npx",
+      "args": ["-y", "@khanglvm/jira-mcp"],
+      "env": {
+        "JIRA_BASE_URL": "https://jira.example.com"
+      }
+    }
+  }
+}
+```
+
+#### Automated Setup
+
+Use the built-in setup command to automatically configure your AI tool:
+
+```bash
+# Setup for Cursor
+npx @khanglvm/jira-mcp setup -c cursor -b https://jira.example.com -u admin -p secret
+
+# Setup for Claude Code
+npx @khanglvm/jira-mcp setup -c claude-code -b https://jira.example.com -u admin -p secret
+
+# Setup with project scope
+npx @khanglvm/jira-mcp setup -c cursor -b https://jira.example.com -u admin -p secret -s project
+
+# List supported CLI tools
+npx @khanglvm/jira-mcp list-clis
+```
 
 **MCP Endpoint:**
 
@@ -187,8 +296,8 @@ The skill provides:
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `JIRA_BASE_URL` | yes | Jira instance URL |
-| `JIRA_USERNAME` | yes | Username |
-| `JIRA_PASSWORD` | yes | Password |
+| `JIRA_USERNAME` | no | Username (can be provided by MCP clients) |
+| `JIRA_PASSWORD` | no | Password (can be provided by MCP clients) |
 | `JIRA_API_VERSION` | no | API version (default: `2`) |
 
 ---
@@ -263,14 +372,49 @@ type = "To Do"  → ERROR: "The value 'To Do' does not exist for the field 'type
 ### 启动服务器
 
 ```bash
-# 基础用法
+# 基础用法（凭证由 MCP 客户端提供）
+JIRA_BASE_URL=https://jira.example.com npx @khanglvm/jira-mcp
+
+# 使用服务器端凭证（可选）
 JIRA_BASE_URL=https://jira.example.com JIRA_USERNAME=admin JIRA_PASSWORD=secret npx @khanglvm/jira-mcp
 
 # 自定义端口
-MCP_PORT=8080 JIRA_BASE_URL=https://jira.example.com JIRA_USERNAME=admin JIRA_PASSWORD=secret npx @khanglvm/jira-mcp
+MCP_PORT=8080 JIRA_BASE_URL=https://jira.example.com npx @khanglvm/jira-mcp
 
 # 远程部署（监听所有网络接口）
-MCP_HOST=0.0.0.0 MCP_PORT=3000 JIRA_BASE_URL=https://jira.example.com JIRA_USERNAME=admin JIRA_PASSWORD=secret npx @khanglvm/jira-mcp
+MCP_HOST=0.0.0.0 MCP_PORT=3000 JIRA_BASE_URL=https://jira.example.com npx @khanglvm/jira-mcp
+```
+
+### 本地开发运行
+
+```bash
+# 克隆并安装依赖
+git clone https://github.com/khanglvm/jira-mcp.git
+cd jira-mcp
+npm install
+npm run build
+
+# 运行本地版本（凭证由 MCP 客户端提供）
+JIRA_BASE_URL=https://jira.example.com node dist/index.js
+
+# 使用服务器端凭证运行（可选）
+JIRA_BASE_URL=https://jira.example.com JIRA_USERNAME=admin JIRA_PASSWORD=secret node dist/index.js
+
+# 默认端口 3000
+JIRA_BASE_URL=https://jira.yjzf.com node dist/index.js
+# 监听: http://127.0.0.1:3000/mcp
+
+# 端口 8080，仅本地访问
+MCP_PORT=8080 JIRA_BASE_URL=https://jira.yjzf.com node dist/index.js
+# 监听: http://127.0.0.1:8080/mcp
+
+# 端口 3000，允许远程访问
+MCP_HOST=0.0.0.0 JIRA_BASE_URL=https://jira.yjzf.com node dist/index.js
+# 监听: http://0.0.0.0:3000/mcp
+
+# 全局链接本地版本
+npm link
+JIRA_BASE_URL=https://jira.example.com jira-mcp
 ```
 
 ### 环境变量配置
@@ -278,11 +422,97 @@ MCP_HOST=0.0.0.0 MCP_PORT=3000 JIRA_BASE_URL=https://jira.example.com JIRA_USERN
 | 变量 | 必填 | 默认值 | 说明 |
 |------|------|--------|------|
 | `JIRA_BASE_URL` | 是 | - | Jira 服务器地址 |
-| `JIRA_USERNAME` | 是 | - | Basic Auth 用户名 |
-| `JIRA_PASSWORD` | 是 | - | Basic Auth 密码 |
+| `JIRA_USERNAME` | 否 | - | Basic Auth 用户名（可由 MCP 客户端提供） |
+| `JIRA_PASSWORD` | 否 | - | Basic Auth 密码（可由 MCP 客户端提供） |
 | `MCP_HOST` | 否 | `127.0.0.1` | HTTP 服务器绑定地址 |
 | `MCP_PORT` | 否 | `3000` | HTTP 服务器端口 |
 | `JIRA_API_VERSION` | 否 | `2` | API 版本 |
+
+### 客户端配置示例
+
+#### Cursor
+
+在 Cursor 的 MCP 配置中添加（Settings > MCP Servers）：
+
+```json
+{
+  "mcpServers": {
+    "jira": {
+      "command": "npx",
+      "args": ["-y", "@khanglvm/jira-mcp"],
+      "env": {
+        "JIRA_BASE_URL": "https://jira.example.com"
+      }
+    }
+  }
+}
+```
+
+或者连接到已运行的服务器：
+
+```json
+{
+  "mcpServers": {
+    "jira": {
+      "url": "http://127.0.0.1:3000/mcp"
+    }
+  }
+}
+```
+
+#### Claude Code
+
+在 `~/.anthropic/claude-code/mcp.json` 中配置：
+
+```json
+{
+  "servers": {
+    "jira": {
+      "command": "npx",
+      "args": ["-y", "@khanglvm/jira-mcp"],
+      "env": {
+        "JIRA_BASE_URL": "https://jira.example.com"
+      }
+    }
+  }
+}
+```
+
+#### VS Code（GitHub Copilot）
+
+在设置 JSON 中配置：
+
+```json
+{
+  "github.copilot.mcp.servers": {
+    "jira": {
+      "command": "npx",
+      "args": ["-y", "@khanglvm/jira-mcp"],
+      "env": {
+        "JIRA_BASE_URL": "https://jira.example.com"
+      }
+    }
+  }
+}
+```
+
+#### 自动配置
+
+使用内置的 setup 命令自动配置 AI 工具：
+
+```bash
+# 配置 Cursor
+npx @khanglvm/jira-mcp setup -c cursor -b https://jira.example.com -u admin -p secret
+
+# 配置 Claude Code
+npx @khanglvm/jira-mcp setup -c claude-code -b https://jira.example.com -u admin -p secret
+
+# 项目级别配置
+npx @khanglvm/jira-mcp setup -c cursor -b https://jira.example.com -u admin -p secret -s project
+
+# 列出支持的工具
+npx @khanglvm/jira-mcp list-clis
+```
 
 ### MCP 端点
 
